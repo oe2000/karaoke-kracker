@@ -30,6 +30,7 @@ const fold=d=>((d%12)+18)%12-6, team=p=>mode=='party'?p>>1:p, tn=t=>mode=='party
 // ---- attack bar ----
 // segs per bar, bars a flawless run earns, combo cap (for bar fill AND passive scoring), drain speed (segs/s), payout (points) by filled segments,
 // points a flawless run moves the score bar passively, score bar's visual half-range around 50 (score itself is never clamped)
+const BUILD='2026-10-04 copy/paste v3';
 const BAR={segs:3,bars:2.5,cap:30,drain:3,pay:[0,2.5,7,16],pass:40,span:75},
 // total 'fill-weight' of a flawless (never-broken) run of D seconds of singing; combo +1 per 0.2s of hitting
 pf=D=>{let s=0,k=0;for(;D>.2;D-=.2,k++)s+=.2*(1+.1*Math.min(k,BAR.cap));return s+D*(1+.1*Math.min(k,BAR.cap))};
@@ -69,7 +70,7 @@ async function demo(){const sc=[60,62,64,65,67,65,64,62],A=[...Array(32)].map((_
  await db('put',{id:'d'+Date.now(),name:'Demo Solo',kind:'solo',audio:null,tr:[{n:A,l:l1}]});
  await db('put',{id:'e'+Date.now(),name:'Demo Duo',kind:'duo',audio:null,tr:[{n:A,l:l1},{n:A.map(n=>({...n,m:n.m+4})),l:l2}]});lib=await db('getAll');library()}
 const LYT=k=>NY+24+k*46,rr=(x,a,b,w,h,r)=>{r=Math.min(r,w/2,h/2);x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath()};
-let pt=0,pp=null;const nd=tr=>tr.l.sort((a,b)=>a.t-b.t).forEach((l,i,a)=>{if(!l.d)l.d=Math.max(.3,Math.min(3,a[i+1]?a[i+1].t-l.t:2))}),movePh=()=>{const h=$('#ph');if(h)h.style.left=pt*PPS+'px'};
+let pt=0,pp=null;const nd=tr=>tr.l.sort((a,b)=>a.t-b.t).forEach((l,i,a)=>{if(!l.d)l.d=Math.max(.3,Math.min(3,a[i+1]?a[i+1].t-l.t:2))}),movePh=()=>{selStat();const h=$('#ph');if(h)h.style.left=pt*PPS+'px'};
 let pvA=null,pvG=null;
 function blip(m){if(pp)return;try{pvA=pvA||new AudioContext();pvA.resume();const t=pvA.currentTime;
  if(pvG){pvG.gain.cancelScheduledValues(t);pvG.gain.setTargetAtTime(0,t,.015)}
@@ -92,8 +93,13 @@ function stopPlay(){if(!pp)return;const r=pp.rec;
  const b=$('#pb'),c=$('#rb'),d=$('#pn');if(b)b.textContent='▶ PLAY';if(c)c.textContent='● REC';if(d)d.textContent='♪ NOTES ONLY';eDraw()}
 function setCt(k){ct=k;en.clear();lsel.clear();app.querySelectorAll('[data-ct]').forEach(x=>x.classList.toggle('on',+x.dataset.ct==ct));eDraw()}
 let xclip=null;
-const msg=t=>{const m=$('#ms');if(m)m.textContent=t},
+const msg=t=>{const m=$('#smg');if(m)m.textContent=t},
  cnt=(a,b)=>[a&&a+' note'+(a>1?'s':''),b&&b+' lyric block'+(b>1?'s':'')].filter(Boolean).join(' + ');
+function selStat(){const e=$('#sst');if(!e||!cur)return;const tr=cur.tr[ct],a=[...en].filter(n=>tr.n.includes(n)).length,b=[...lsel].filter(l=>tr.l.includes(l)).length;
+ e.textContent='Selected: '+(cnt(a,b)||'nothing')+'   |   Clipboard: '+((xclip&&cnt(xclip.n.length,xclip.l.length))||'empty')+'   |   Playhead: '+pt.toFixed(2)+'s'}
+function selAll(){const tr=cur.tr[ct];tr.n.forEach(n=>en.add(n));tr.l.forEach(l=>lsel.add(l));eDraw()}
+function delSel(){const tr=cur.tr[ct],a=tr.n.filter(n=>en.has(n)).length,b=tr.l.filter(l=>lsel.has(l)).length;if(!a&&!b)return msg('nothing selected to delete');
+ tr.n=tr.n.filter(n=>!en.has(n));tr.l=tr.l.filter(l=>!lsel.has(l));en.clear();lsel.clear();msg('deleted '+cnt(a,b));eDraw()}
 function copySel(cut){
  const tr=cur.tr[ct],ns=[...en].filter(n=>tr.n.includes(n)),ls=[...lsel].filter(l=>tr.l.includes(l));
  if(!ns.length&&!ls.length)return msg('nothing selected: box-select notes or lyric blocks first (Ctrl+A = whole track)');
@@ -114,10 +120,12 @@ function editLyric(lt,l){const tx=prompt('Edit lyric (empty deletes):',l.x);if(t
 function edit(){stopPlay();pt=0;cur.tr.forEach(nd);ct=0;en.clear();lsel.clear();app.innerHTML=`<div class=w style="max-width:1300px"><div class=row><input id=nm style="max-width:300px"><b>${cur.kind.toUpperCase()}</b><button id=sv class=go>SAVE</button><button id=bk2>BACK TO LIBRARY</button><span id=ms class=d></span></div>
 <div class=row>Melody audio: <input type=file id=au accept="audio/*" style="width:auto">${cur.audio?'✔ loaded':''} offset (s): <input type=number id=ao step=.05 style="width:90px"><span class=d>(delays melody audio vs. notes; negative starts it earlier)</span></div>
 <div class=row>Editing: ${cur.tr.map((_,k)=>`<button data-ct=${k} class="${k?'':'on'}" style="border-color:${C[k]}">TRACK ${k+1}</button>`).join('')} shift track: <button data-tr=-12>-8ve</button><button data-tr=-1>-1</button><button data-tr=1>+1</button><button data-tr=12>+8ve</button> auto-import vocals audio: <input type=file id=iv accept="audio/*" style="width:auto"><span id=ist class=d></span> import offset (s): <input type=number id=io step=.05 value=0 style="width:90px"> shift track timing: <button data-ts=-1>-1s</button><button data-ts=-.1>-.1s</button><button data-ts=.1>+.1s</button><button data-ts=1>+1s</button></div>
-<div class=row>Selection: <button id=cp>COPY</button><button id=cx>CUT</button><button id=pa>PASTE AT PLAYHEAD</button><button id=pi>PASTE SAME TIME</button><span class=d>Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+Shift+V. Copies notes and lyric blocks together. To copy to the other track: copy, click that TRACK button (or the colored tab above its lyric lane), then paste. Clicking an empty spot in a lyric lane adds a new lyric block instead.</span></div>
+<div class=row>Selection: <button id=cp class=go>COPY SELECTED</button><button id=pa class=go>PASTE SELECTED AT PLAYHEAD</button><button id=pi>PASTE SELECTED (SAME TIME)</button><button id=cx>CUT SELECTED</button><button id=sela>SELECT ALL IN TRACK</button><button id=seld>DESELECT</button><button id=delsel>DELETE SELECTED</button></div>
+ <div class=row><b id=sst style="color:var(--fg)"></b></div><div class=row><span id=smg class=d></span><span class=d style="margin-left:auto">build ${BUILD}</span></div>
+ <p class=d>To copy notes AND lyrics together: drag along the colored tab above a lyric lane (this selects every note and lyric block in that time range), or box-select notes and Shift-click/Shift-drag lyric blocks. Press COPY SELECTED, click the TRACK button you want to paste into, move the white playhead knob (or click the strip under the notes) to where the first item should land, then press PASTE SELECTED AT PLAYHEAD. PASTE SELECTED (SAME TIME) keeps the original timing instead.</p>
 <div class=row><button id=pb class=go>▶ PLAY</button><button id=pn>♪ NOTES ONLY</button><button id=z0>⏮ START</button><button id=rb>● REC</button><label><input type=checkbox id=hn checked style="width:auto"> hear notes</label><span class=d>Space = play/stop. Drag the white playhead knob (or click the strip under the notes) to move it. REC sings into the selected track from the playhead and replaces notes in that span (use headphones if a melody is playing).</span></div>
 <div id=sc style="overflow-x:auto;border:1px solid var(--dim);margin:8px 0"><div style="position:relative;width:fit-content"><div style="position:sticky;left:0;width:0;height:0;z-index:3">${cur.tr.map((_,k)=>`<div class=lyl style="position:absolute;left:0;top:${LYT(k)}px;height:14px;line-height:14px;padding:0 10px 0 6px;background:${C[k]};color:#06060e;font:bold 11px monospace;border-radius:0 7px 7px 0;pointer-events:none;white-space:nowrap">${cur.kind=='duo'?'TRACK '+(k+1)+' ':''}LYRICS</div>`).join('')}</div><canvas id=tc style="width:auto;display:block;touch-action:none"></canvas><div id=ph style="position:absolute;top:0;bottom:0;left:0;width:0;pointer-events:none"><div style="position:absolute;top:0;bottom:0;left:-1px;width:2px;background:#fff"></div><div id=phh style="position:absolute;left:-8px;top:0;width:17px;height:17px;background:#fff;border-radius:0 0 9px 9px;cursor:ew-resize;pointer-events:auto"></div></div></div></div>
-<p class=d>Notes: click empty = add, drag empty area = box-select (Shift-click adds/removes), drag = move the selection, drag right end = resize. Hotkeys on the selection: arrow keys move or change pitch (Shift = bigger steps), Delete removes, Ctrl+A selects the whole track. Lyrics (the purple panel under the notes, one color-coded lane per track): click empty space in a lane = add a lyric block, drag empty space = box-select blocks, click = select (Shift-click adds/removes), drag = move the selection, drag right end = resize, double-click or Enter = edit text (empty text deletes). Clicking a lane or its colored tab selects that track. Ctrl+A selects all notes and lyrics of the track.</p>
+<p class=d>Notes: click empty = add, drag empty area = box-select (Shift-click adds/removes), drag = move the selection, drag right end = resize. Hotkeys on the selection: arrow keys move or change pitch (Shift = bigger steps), Delete removes, Ctrl+A selects the whole track. Lyrics (the purple panel under the notes, one color-coded lane per track): click empty space in a lane = add a lyric block, drag empty space = box-select blocks (if the blocks fill the lane, drag along the colored tab above it: that selects the notes AND lyric blocks in that time range), click = select (Shift-click adds/removes), drag = move the selection, drag right end = resize, double-click or Enter = edit text (empty text deletes). Clicking a lane or its colored tab selects that track. Ctrl+A selects all notes and lyrics of the track.</p>
 <textarea id=lp rows=3 placeholder="Optional: paste LRC lines ([mm:ss.xx] words) for the selected track, then click away to import"></textarea></div>`;$('#nm').value=cur.name;$('#ao').value=cur.ao||0;bindTl();eDraw()}
 function eDraw(){const c=$('#tc');if(!c)return;const x=c.getContext('2d'),e=Math.max(20,...cur.tr.flatMap(t=>t.n.map(n=>n.s+n.d)),...cur.tr.flatMap(t=>t.l.map(l=>l.t+3)))+10;
  c.width=e*PPS;c.style.width=c.width+'px';c.height=LYT(cur.tr.length)+2;x.font='11px monospace';
@@ -133,7 +141,7 @@ function eDraw(){const c=$('#tc');if(!c)return;const x=c.getContext('2d'),e=Math
   x.globalAlpha=1;x.font='bold 13px monospace';
   tr.l.forEach(l=>{const bx=l.t*PPS,bw=Math.max(6,l.d*PPS),by=y0+16;x.fillStyle=C[k];rr(x,bx,by,bw,24,6);x.fill();if(lsel.has(l)){x.strokeStyle='#fff';x.lineWidth=2;x.stroke();x.lineWidth=1}x.save();x.beginPath();x.rect(bx,by,bw,24);x.clip();x.fillStyle='#06060e';x.fillText(l.x,bx+6,by+16);x.restore()})});
  app.querySelectorAll('.lyl').forEach((el,k)=>{el.style.outline=k==ct?'2px solid #fff':'none'});
- if(mr){x.strokeStyle='#fff';x.setLineDash([4,3]);x.strokeRect(mr[0],mr[1],mr[2]-mr[0],mr[3]-mr[1]);x.setLineDash([])}}
+ if(mr){x.strokeStyle='#fff';x.setLineDash([4,3]);x.strokeRect(mr[0],mr[1],mr[2]-mr[0],mr[3]-mr[1]);x.setLineDash([])}selStat()}
 function bindTl(){const c=$('#tc');let dr=null;const hd=$('#phh'),sc=$('#sc');hd.onpointerdown=e=>{stopPlay();hd.setPointerCapture(e.pointerId);hd.d=1};
  hd.onpointermove=e=>{if(!hd.d)return;const r=c.getBoundingClientRect(),w=sc.getBoundingClientRect();pt=Math.max(0,(e.clientX-r.left)/PPS);if(e.clientX>w.right-40)sc.scrollLeft+=15;if(e.clientX<w.left+40)sc.scrollLeft-=15;movePh()};hd.onpointerup=()=>hd.d=0;
  const P=e=>{const r=c.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]},q=v=>Math.round(v*20)/20,
@@ -148,16 +156,16 @@ function bindTl(){const c=$('#tc');let dr=null;const hd=$('#phh'),sc=$('#sc');hd
    if(py>=LYT(k)+14){const l=lt.l.find(l=>px>=l.t*PPS&&px<=(l.t+l.d)*PPS);
     if(l){if(e.shiftKey&&lsel.has(l))lsel.delete(l);else{if(!lsel.has(l)){if(!e.shiftKey){lsel.clear();en.clear()}lsel.add(l)}
      dr={o:l,lt,t:px>(l.t+l.d)*PPS-8&&l.d>.4&&lsel.size==1?'lr':'l',px,py,s:l.t,d:l.d,g:[...lsel].map(o=>({o,t:o.t}))}}}
-    else{if(!e.shiftKey){lsel.clear();en.clear()}dr={t:'lm',lt,px,py}}}}}eDraw()};
+    else{if(!e.shiftKey){lsel.clear();en.clear()}dr={t:'lm',lt,px,py}}}else{if(!e.shiftKey){lsel.clear();en.clear()}dr={t:'lm',lt,px,py,cap:1}}}}eDraw()};
  c.onpointermove=e=>{if(!dr)return;const[px,py]=P(e),o=dr.o,dt=(px-dr.px)/PPS;dr.mv=dr.mv||Math.abs(px-dr.px)+Math.abs(py-dr.py)>3;
   if(dr.t=='m')mr=[dr.px,dr.py,px,py];
   else if(dr.t=='n'){const g=dr.g,ds=Math.max(-Math.min(...g.map(z=>z.s)),q(dt)),dm=Math.max(LO-Math.min(...g.map(z=>z.m)),Math.min(HI-Math.max(...g.map(z=>z.m)),-Math.round((py-dr.py)/PH)));g.forEach(z=>{z.o.s=+(z.s+ds).toFixed(2);z.o.m=z.m+dm});if(dr.o.m!==dr.lp){dr.lp=dr.o.m;blip(dr.o.m)}}
-  else if(dr.t=='lm')mr=[dr.px,dr.py,px,py];else if(dr.t=='r')o.d=Math.max(.05,q(dr.d+dt));else if(dr.t=='lr')o.d=Math.max(.2,q(dr.d+dt));else if(dr.t=='l'){const g=dr.g,ds=Math.max(-Math.min(...g.map(z=>z.t)),q(dt));g.forEach(z=>z.o.t=+(z.t+ds).toFixed(2))}eDraw()};
+  else if(dr.t=='lm')mr=dr.cap?[dr.px,0,px,c.height-1]:[dr.px,dr.py,px,py];else if(dr.t=='r')o.d=Math.max(.05,q(dr.d+dt));else if(dr.t=='lr')o.d=Math.max(.2,q(dr.d+dt));else if(dr.t=='l'){const g=dr.g,ds=Math.max(-Math.min(...g.map(z=>z.t)),q(dt));g.forEach(z=>z.o.t=+(z.t+ds).toFixed(2))}eDraw()};
  c.onpointerup=()=>{const tr=cur.tr[ct];
   if(dr&&dr.t=='m'){if(!dr.mv){const n={s:Math.max(0,q(dr.px/PPS)),d:.5,m:Math.max(LO,Math.min(HI,HI-Math.floor(dr.py/PH)))};tr.n.push(n);en.clear();en.add(n);blip(n.m)}
    else if(mr){const a=Math.min(mr[0],mr[2]),b=Math.max(mr[0],mr[2]),c0=Math.min(mr[1],mr[3]),d0=Math.max(mr[1],mr[3]);tr.n.forEach(n=>{const y=(HI-n.m)*PH;if(n.s*PPS<b&&(n.s+n.d)*PPS>a&&y<d0&&y+PH>c0)en.add(n)})}mr=null}
-  if(dr&&dr.t=='lm'){const lt=dr.lt;if(!dr.mv){const tx=prompt('Lyric text:');if(tx){const l={t:Math.max(0,q(dr.px/PPS)),x:tx,d:1};lt.l.push(l);lsel.clear();en.clear();lsel.add(l)}}
-   else if(mr){const a=Math.min(mr[0],mr[2]),b=Math.max(mr[0],mr[2]);lt.l.forEach(l=>{if(l.t*PPS<b&&(l.t+l.d)*PPS>a)lsel.add(l)})}mr=null}
+  if(dr&&dr.t=='lm'){const lt=dr.lt;if(!dr.mv){const tx=dr.cap?null:prompt('Lyric text:');if(tx){const l={t:Math.max(0,q(dr.px/PPS)),x:tx,d:1};lt.l.push(l);lsel.clear();en.clear();lsel.add(l)}}
+   else if(mr){const a=Math.min(mr[0],mr[2]),b=Math.max(mr[0],mr[2]);lt.l.forEach(l=>{if(l.t*PPS<b&&(l.t+l.d)*PPS>a)lsel.add(l)});if(dr.cap)lt.n.forEach(n=>{if(n.s*PPS<b&&(n.s+n.d)*PPS>a)en.add(n)})}mr=null}
   cur.tr.forEach(t=>t.l.sort((a,b)=>a.t-b.t));dr=null;eDraw()};
  c.ondblclick=e=>{const[px,py]=P(e),tr=cur.tr[ct],i=tr.n.findIndex(n=>nh(n,px,py));if(py<NY&&i>=0){en.delete(tr.n[i]);tr.n.splice(i,1);eDraw()}
   else if(py>=NY+22){const k=Math.floor((py-NY-24)/46);if(k>=0&&k<cur.tr.length&&py>=LYT(k)+14&&py<=LYT(k)+42){const lt=cur.tr[k],l=lt.l.find(l=>px>=l.t*PPS&&px<=(l.t+l.d)*PPS);if(l)editLyric(lt,l)}}}}
@@ -289,7 +297,7 @@ app.onclick=async e=>{const b=e.target.closest('button');if(!b)return;const D=b.
  else if(D.rm){if(confirm('Delete this song?')){await db('delete',D.rm);await ld();library()}}
  else if(i=='exa')exportSongs(lib,'karaoke-kracker-songs-'+new Date().toISOString().slice(0,10)+'.json');else if(D.ex){const s=lib.find(s=>s.id==D.ex);if(s)exportSongs([s],(s.name.replace(/[^\w\- ]+/g,'').trim()||'song')+'.json')}else if(i=='imb')$('#im').click();
  else if(i=='dm')demo();else if(i=='sv'){await db('put',cur);await ld();$('#ms').textContent='saved ✔'}else if(i=='bk2'){stopPlay();await ld();library()}else if(i=='pb'){play();b.blur()}else if(i=='pn'){play(false,true);b.blur()}else if(i=='rb'){play(true);b.blur()}else if(D.ts){const tr=cur.tr[ct],mn=Math.min(...tr.n.map(n=>n.s),...tr.l.map(l=>l.t)),d=Math.max(+D.ts,-mn);tr.n.forEach(n=>n.s=+(n.s+d).toFixed(2));tr.l.forEach(l=>l.t=+(l.t+d).toFixed(2));eDraw()}else if(i=='z0'){pt=0;movePh();$('#sc').scrollLeft=0}
- else if(i=='cp'){copySel();b.blur()}else if(i=='cx'){copySel(true);b.blur()}else if(i=='pa'){pasteSel(false);b.blur()}else if(i=='pi'){pasteSel(true);b.blur()}
+ else if(i=='cp'){copySel();b.blur()}else if(i=='cx'){copySel(true);b.blur()}else if(i=='pa'){pasteSel(false);b.blur()}else if(i=='pi'){pasteSel(true);b.blur()}else if(i=='sela'){selAll();b.blur()}else if(i=='seld'){en.clear();lsel.clear();eDraw();b.blur()}else if(i=='delsel'){delSel();b.blur()}
  else if(D.ct!=null)setCt(+D.ct)
  else if(D.tr){cur.tr[ct].n.forEach(n=>n.m=Math.max(LO,Math.min(HI,n.m+ +D.tr)));eDraw()}
  else if(i=='st')begin();else if(i=='go2')join();else if(i=='rm')startMic().then(ok=>{$('#me').textContent=ok?'Mic on ✔':'Mic failed: '+micErr});
