@@ -24,7 +24,7 @@ const C=['#00ff9c','#ff3b8b','#3bc8ff','#ffd23b'],N='C C# D D# E F F# G G# A A# 
 const BR=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt'],tp=()=>'kkv1/'+code.toLowerCase();
 function mq(){return new Promise((ok,no)=>{let i=0;const t=()=>{if(i>=BR.length)return no('no broker reachable');const c=mqtt.connect(BR[i++],{reconnectPeriod:0});let d=0;
  const f=()=>{if(d++)return;clearTimeout(h);c.end(true);t()},h=setTimeout(f,7000);c.once('connect',()=>{if(d++)return c.end(true);clearTimeout(h);c.options.reconnectPeriod=3000;ok(c)});c.on('error',f)};t()})}
-let mc=null,mode='duel',tol=1.5,lib=[],cur=null,sel={},grace=.5,ct=0,en=new Set(),oc={a:[0,0],b:[0,0]},strict=false,mr=null,code='',slot=0,pm=null,G=null,
+let mc=null,mode='duel',tol=1.5,lib=[],cur=null,sel={},grace=.5,ct=0,en=new Set(),lsel=new Set(),oc={a:[0,0],b:[0,0]},strict=false,mr=null,code='',slot=0,pm=null,G=null,
 pl=[0,1,2,3].map(()=>({m:null,seen:0,hb:-1e9,combo:0,hold:0,len:0,bar:0,fx:null,fr:0,cd:[0,0,0],on:false}));
 const fold=d=>((d%12)+18)%12-6, team=p=>mode=='party'?p>>1:p, tn=t=>mode=='party'?'TEAM '+(t+1):'P'+(t+1);
 // ---- attack bar ----
@@ -90,13 +90,34 @@ function stopPlay(){if(!pp)return;const r=pp.rec;
  if(r){const tr=cur.tr[ct],a=pp.p0,z=pt,nn=toNotes(r.p,a);tr.n=tr.n.filter(n=>n.s+n.d<=a||n.s>=z).concat(nn);en.clear()}
  pp.os.forEach(o=>{try{o.stop()}catch(_){}});if(pp.au)pp.au.pause();if(pp.st)pp.st.getTracks().forEach(t=>t.stop());cancelAnimationFrame(pp.raf);pp.ac.close();pp=null;
  const b=$('#pb'),c=$('#rb'),d=$('#pn');if(b)b.textContent='▶ PLAY';if(c)c.textContent='● REC';if(d)d.textContent='♪ NOTES ONLY';eDraw()}
-function setCt(k){ct=k;en.clear();app.querySelectorAll('[data-ct]').forEach(x=>x.classList.toggle('on',+x.dataset.ct==ct));eDraw()}
-function edit(){stopPlay();pt=0;cur.tr.forEach(nd);ct=0;en.clear();app.innerHTML=`<div class=w style="max-width:1300px"><div class=row><input id=nm style="max-width:300px"><b>${cur.kind.toUpperCase()}</b><button id=sv class=go>SAVE</button><button id=bk2>BACK TO LIBRARY</button><span id=ms class=d></span></div>
+function setCt(k){ct=k;en.clear();lsel.clear();app.querySelectorAll('[data-ct]').forEach(x=>x.classList.toggle('on',+x.dataset.ct==ct));eDraw()}
+let xclip=null;
+const msg=t=>{const m=$('#ms');if(m)m.textContent=t},
+ cnt=(a,b)=>[a&&a+' note'+(a>1?'s':''),b&&b+' lyric block'+(b>1?'s':'')].filter(Boolean).join(' + ');
+function copySel(cut){
+ const tr=cur.tr[ct],ns=[...en].filter(n=>tr.n.includes(n)),ls=[...lsel].filter(l=>tr.l.includes(l));
+ if(!ns.length&&!ls.length)return msg('nothing selected: box-select notes or lyric blocks first (Ctrl+A = whole track)');
+ const t0=Math.min(...ns.map(n=>n.s),...ls.map(l=>l.t));
+ xclip={t0,n:ns.map(n=>({s:+(n.s-t0).toFixed(3),d:n.d,m:n.m})),l:ls.map(l=>({t:+(l.t-t0).toFixed(3),x:l.x,d:l.d}))};
+ if(cut){tr.n=tr.n.filter(n=>!en.has(n));tr.l=tr.l.filter(l=>!lsel.has(l));en.clear();lsel.clear();eDraw()}
+ msg((cut?'cut ':'copied ')+cnt(ns.length,ls.length))}
+function pasteSel(same){
+ if(!xclip)return msg('nothing to paste yet: copy something first');
+ const tr=cur.tr[ct],off=same?xclip.t0:Math.round(pt*20)/20,
+  nn=xclip.n.map(n=>({s:+Math.max(0,off+n.s).toFixed(2),d:n.d,m:Math.max(LO,Math.min(HI,n.m))})),
+  ll=xclip.l.map(l=>({t:+Math.max(0,off+l.t).toFixed(2),x:l.x,d:l.d}));
+ tr.n.push(...nn);tr.l.push(...ll);tr.l.sort((a,b)=>a.t-b.t);
+ en.clear();lsel.clear();nn.forEach(n=>en.add(n));ll.forEach(l=>lsel.add(l));
+ const sc=$('#sc'),x0=Math.min(...nn.map(n=>n.s),...ll.map(l=>l.t))*PPS;if(sc&&(x0<sc.scrollLeft||x0>sc.scrollLeft+sc.clientWidth-80))sc.scrollLeft=Math.max(0,x0-100);
+ msg('pasted '+cnt(nn.length,ll.length)+' into track '+(ct+1)+(same?' (same time)':' at playhead')+' - still selected, so you can drag or Delete them');eDraw()}
+function editLyric(lt,l){const tx=prompt('Edit lyric (empty deletes):',l.x);if(tx==='')lt.l.splice(lt.l.indexOf(l),1),lsel.delete(l);else if(tx!=null)l.x=tx;eDraw()}
+function edit(){stopPlay();pt=0;cur.tr.forEach(nd);ct=0;en.clear();lsel.clear();app.innerHTML=`<div class=w style="max-width:1300px"><div class=row><input id=nm style="max-width:300px"><b>${cur.kind.toUpperCase()}</b><button id=sv class=go>SAVE</button><button id=bk2>BACK TO LIBRARY</button><span id=ms class=d></span></div>
 <div class=row>Melody audio: <input type=file id=au accept="audio/*" style="width:auto">${cur.audio?'✔ loaded':''} offset (s): <input type=number id=ao step=.05 style="width:90px"><span class=d>(delays melody audio vs. notes; negative starts it earlier)</span></div>
 <div class=row>Editing: ${cur.tr.map((_,k)=>`<button data-ct=${k} class="${k?'':'on'}" style="border-color:${C[k]}">TRACK ${k+1}</button>`).join('')} shift track: <button data-tr=-12>-8ve</button><button data-tr=-1>-1</button><button data-tr=1>+1</button><button data-tr=12>+8ve</button> auto-import vocals audio: <input type=file id=iv accept="audio/*" style="width:auto"><span id=ist class=d></span> import offset (s): <input type=number id=io step=.05 value=0 style="width:90px"> shift track timing: <button data-ts=-1>-1s</button><button data-ts=-.1>-.1s</button><button data-ts=.1>+.1s</button><button data-ts=1>+1s</button></div>
+<div class=row>Selection: <button id=cp>COPY</button><button id=cx>CUT</button><button id=pa>PASTE AT PLAYHEAD</button><button id=pi>PASTE SAME TIME</button><span class=d>Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+Shift+V. Copies notes and lyric blocks together. To copy to the other track: copy, click that TRACK button (or the colored tab above its lyric lane), then paste. Clicking an empty spot in a lyric lane adds a new lyric block instead.</span></div>
 <div class=row><button id=pb class=go>▶ PLAY</button><button id=pn>♪ NOTES ONLY</button><button id=z0>⏮ START</button><button id=rb>● REC</button><label><input type=checkbox id=hn checked style="width:auto"> hear notes</label><span class=d>Space = play/stop. Drag the white playhead knob (or click the strip under the notes) to move it. REC sings into the selected track from the playhead and replaces notes in that span (use headphones if a melody is playing).</span></div>
 <div id=sc style="overflow-x:auto;border:1px solid var(--dim);margin:8px 0"><div style="position:relative;width:fit-content"><div style="position:sticky;left:0;width:0;height:0;z-index:3">${cur.tr.map((_,k)=>`<div class=lyl style="position:absolute;left:0;top:${LYT(k)}px;height:14px;line-height:14px;padding:0 10px 0 6px;background:${C[k]};color:#06060e;font:bold 11px monospace;border-radius:0 7px 7px 0;pointer-events:none;white-space:nowrap">${cur.kind=='duo'?'TRACK '+(k+1)+' ':''}LYRICS</div>`).join('')}</div><canvas id=tc style="width:auto;display:block;touch-action:none"></canvas><div id=ph style="position:absolute;top:0;bottom:0;left:0;width:0;pointer-events:none"><div style="position:absolute;top:0;bottom:0;left:-1px;width:2px;background:#fff"></div><div id=phh style="position:absolute;left:-8px;top:0;width:17px;height:17px;background:#fff;border-radius:0 0 9px 9px;cursor:ew-resize;pointer-events:auto"></div></div></div></div>
-<p class=d>Notes: click empty = add, drag empty area = box-select (Shift-click adds/removes), drag = move the selection, drag right end = resize. Hotkeys on the selection: arrow keys move or change pitch (Shift = bigger steps), Delete removes, Ctrl+A selects the whole track. Lyrics (the purple panel under the notes, one color-coded lane per track): click empty space in a lane = add a lyric block, drag = move, drag right end = resize, click = edit text (empty text deletes). Clicking a lane or its colored tab selects that track.</p>
+<p class=d>Notes: click empty = add, drag empty area = box-select (Shift-click adds/removes), drag = move the selection, drag right end = resize. Hotkeys on the selection: arrow keys move or change pitch (Shift = bigger steps), Delete removes, Ctrl+A selects the whole track. Lyrics (the purple panel under the notes, one color-coded lane per track): click empty space in a lane = add a lyric block, drag empty space = box-select blocks, click = select (Shift-click adds/removes), drag = move the selection, drag right end = resize, double-click or Enter = edit text (empty text deletes). Clicking a lane or its colored tab selects that track. Ctrl+A selects all notes and lyrics of the track.</p>
 <textarea id=lp rows=3 placeholder="Optional: paste LRC lines ([mm:ss.xx] words) for the selected track, then click away to import"></textarea></div>`;$('#nm').value=cur.name;$('#ao').value=cur.ao||0;bindTl();eDraw()}
 function eDraw(){const c=$('#tc');if(!c)return;const x=c.getContext('2d'),e=Math.max(20,...cur.tr.flatMap(t=>t.n.map(n=>n.s+n.d)),...cur.tr.flatMap(t=>t.l.map(l=>l.t+3)))+10;
  c.width=e*PPS;c.style.width=c.width+'px';c.height=LYT(cur.tr.length)+2;x.font='11px monospace';
@@ -110,7 +131,7 @@ function eDraw(){const c=$('#tc');if(!c)return;const x=c.getContext('2d'),e=Math
   x.globalAlpha=on?.18:.08;x.fillRect(0,y0+14,c.width,28);
   x.globalAlpha=on?1:.6;x.strokeStyle=C[k];x.lineWidth=1;x.strokeRect(.5,y0+.5,c.width-1,41);
   x.globalAlpha=1;x.font='bold 13px monospace';
-  tr.l.forEach(l=>{const bx=l.t*PPS,bw=Math.max(6,l.d*PPS),by=y0+16;x.fillStyle=C[k];rr(x,bx,by,bw,24,6);x.fill();x.save();x.beginPath();x.rect(bx,by,bw,24);x.clip();x.fillStyle='#06060e';x.fillText(l.x,bx+6,by+16);x.restore()})});
+  tr.l.forEach(l=>{const bx=l.t*PPS,bw=Math.max(6,l.d*PPS),by=y0+16;x.fillStyle=C[k];rr(x,bx,by,bw,24,6);x.fill();if(lsel.has(l)){x.strokeStyle='#fff';x.lineWidth=2;x.stroke();x.lineWidth=1}x.save();x.beginPath();x.rect(bx,by,bw,24);x.clip();x.fillStyle='#06060e';x.fillText(l.x,bx+6,by+16);x.restore()})});
  app.querySelectorAll('.lyl').forEach((el,k)=>{el.style.outline=k==ct?'2px solid #fff':'none'});
  if(mr){x.strokeStyle='#fff';x.setLineDash([4,3]);x.strokeRect(mr[0],mr[1],mr[2]-mr[0],mr[3]-mr[1]);x.setLineDash([])}}
 function bindTl(){const c=$('#tc');let dr=null;const hd=$('#phh'),sc=$('#sc');hd.onpointerdown=e=>{stopPlay();hd.setPointerCapture(e.pointerId);hd.d=1};
@@ -119,23 +140,27 @@ function bindTl(){const c=$('#tc');let dr=null;const hd=$('#phh'),sc=$('#sc');hd
  nh=(n,px,py)=>px>=n.s*PPS&&px<=(n.s+n.d)*PPS&&py>=(HI-n.m)*PH-2&&py<=(HI-n.m)*PH+PH+2;
  c.onpointerdown=e=>{const[px,py]=P(e),tr=cur.tr[ct],x=c.getContext('2d');c.setPointerCapture(e.pointerId);x.font='13px monospace';
   if(py<NY){const n=tr.n.find(n=>nh(n,px,py));
-   if(n){if(e.shiftKey&&en.has(n))en.delete(n);else{blip(n.m);if(!en.has(n)){if(!e.shiftKey)en.clear();en.add(n)}
+   if(n){if(e.shiftKey&&en.has(n))en.delete(n);else{blip(n.m);if(!en.has(n)){if(!e.shiftKey){en.clear();lsel.clear()}en.add(n)}
     dr={o:n,t:px>(n.s+n.d)*PPS-8&&n.d>.3&&en.size==1?'r':'n',px,py,d:n.d,lp:n.m,g:[...en].map(o=>({o,s:o.s,m:o.m}))}}}
-   else{if(!e.shiftKey)en.clear();dr={t:'m',px,py}}}
+   else{if(!e.shiftKey){en.clear();lsel.clear()}dr={t:'m',px,py}}}
   else if(py<NY+20){pt=Math.max(0,px/PPS);movePh()}
   else{const k=Math.floor((py-NY-24)/46);if(k>=0&&k<cur.tr.length&&py<=LYT(k)+42){if(k!=ct)setCt(k);const lt=cur.tr[k];
    if(py>=LYT(k)+14){const l=lt.l.find(l=>px>=l.t*PPS&&px<=(l.t+l.d)*PPS);
-    if(l)dr={o:l,lt,t:px>(l.t+l.d)*PPS-8&&l.d>.4?'lr':'l',px,py,s:l.t,d:l.d};else{const tx=prompt('Lyric text:');if(tx){lt.l.push({t:Math.max(0,q(px/PPS)),x:tx,d:1});lt.l.sort((a,b)=>a.t-b.t)}}}}}eDraw()};
+    if(l){if(e.shiftKey&&lsel.has(l))lsel.delete(l);else{if(!lsel.has(l)){if(!e.shiftKey){lsel.clear();en.clear()}lsel.add(l)}
+     dr={o:l,lt,t:px>(l.t+l.d)*PPS-8&&l.d>.4&&lsel.size==1?'lr':'l',px,py,s:l.t,d:l.d,g:[...lsel].map(o=>({o,t:o.t}))}}}
+    else{if(!e.shiftKey){lsel.clear();en.clear()}dr={t:'lm',lt,px,py}}}}}eDraw()};
  c.onpointermove=e=>{if(!dr)return;const[px,py]=P(e),o=dr.o,dt=(px-dr.px)/PPS;dr.mv=dr.mv||Math.abs(px-dr.px)+Math.abs(py-dr.py)>3;
   if(dr.t=='m')mr=[dr.px,dr.py,px,py];
   else if(dr.t=='n'){const g=dr.g,ds=Math.max(-Math.min(...g.map(z=>z.s)),q(dt)),dm=Math.max(LO-Math.min(...g.map(z=>z.m)),Math.min(HI-Math.max(...g.map(z=>z.m)),-Math.round((py-dr.py)/PH)));g.forEach(z=>{z.o.s=+(z.s+ds).toFixed(2);z.o.m=z.m+dm});if(dr.o.m!==dr.lp){dr.lp=dr.o.m;blip(dr.o.m)}}
-  else if(dr.t=='r')o.d=Math.max(.05,q(dr.d+dt));else if(dr.t=='lr')o.d=Math.max(.2,q(dr.d+dt));else o.t=Math.max(0,q(dr.s+dt));eDraw()};
+  else if(dr.t=='lm')mr=[dr.px,dr.py,px,py];else if(dr.t=='r')o.d=Math.max(.05,q(dr.d+dt));else if(dr.t=='lr')o.d=Math.max(.2,q(dr.d+dt));else if(dr.t=='l'){const g=dr.g,ds=Math.max(-Math.min(...g.map(z=>z.t)),q(dt));g.forEach(z=>z.o.t=+(z.t+ds).toFixed(2))}eDraw()};
  c.onpointerup=()=>{const tr=cur.tr[ct];
   if(dr&&dr.t=='m'){if(!dr.mv){const n={s:Math.max(0,q(dr.px/PPS)),d:.5,m:Math.max(LO,Math.min(HI,HI-Math.floor(dr.py/PH)))};tr.n.push(n);en.clear();en.add(n);blip(n.m)}
    else if(mr){const a=Math.min(mr[0],mr[2]),b=Math.max(mr[0],mr[2]),c0=Math.min(mr[1],mr[3]),d0=Math.max(mr[1],mr[3]);tr.n.forEach(n=>{const y=(HI-n.m)*PH;if(n.s*PPS<b&&(n.s+n.d)*PPS>a&&y<d0&&y+PH>c0)en.add(n)})}mr=null}
-  if(dr&&dr.t[0]=='l'&&!dr.mv){const tx=prompt('Edit lyric (empty deletes):',dr.o.x);if(tx==='')dr.lt.l.splice(dr.lt.l.indexOf(dr.o),1);else if(tx!=null)dr.o.x=tx}
+  if(dr&&dr.t=='lm'){const lt=dr.lt;if(!dr.mv){const tx=prompt('Lyric text:');if(tx){const l={t:Math.max(0,q(dr.px/PPS)),x:tx,d:1};lt.l.push(l);lsel.clear();en.clear();lsel.add(l)}}
+   else if(mr){const a=Math.min(mr[0],mr[2]),b=Math.max(mr[0],mr[2]);lt.l.forEach(l=>{if(l.t*PPS<b&&(l.t+l.d)*PPS>a)lsel.add(l)})}mr=null}
   cur.tr.forEach(t=>t.l.sort((a,b)=>a.t-b.t));dr=null;eDraw()};
- c.ondblclick=e=>{const[px,py]=P(e),tr=cur.tr[ct],i=tr.n.findIndex(n=>nh(n,px,py));if(py<NY&&i>=0){en.delete(tr.n[i]);tr.n.splice(i,1);eDraw()}}}
+ c.ondblclick=e=>{const[px,py]=P(e),tr=cur.tr[ct],i=tr.n.findIndex(n=>nh(n,px,py));if(py<NY&&i>=0){en.delete(tr.n[i]);tr.n.splice(i,1);eDraw()}
+  else if(py>=NY+22){const k=Math.floor((py-NY-24)/46);if(k>=0&&k<cur.tr.length&&py>=LYT(k)+14&&py<=LYT(k)+42){const lt=cur.tr[k],l=lt.l.find(l=>px>=l.t*PPS&&px<=(l.t+l.d)*PPS);if(l)editLyric(lt,l)}}}}
 function toNotes(p,off=0){const n=[];let c=null;p.forEach((v,i)=>{const t=i*.05;if(v==null){c=null;return}if(c&&Math.abs(v-c.a)<.7){c.d=t+.05-c.s;c.sum+=v;c.k++;c.a=c.sum/c.k}else{c={s:t,d:.05,a:v,sum:v,k:1};n.push(c)}});
  return n.filter(o=>o.d>=.1).map(o=>({s:Math.max(0,o.s+off),d:o.d,m:Math.max(LO,Math.min(HI,Math.round(o.a)))}))}
 async function an(f){const st=$('#ist'),tr=cur.tr[ct];st.textContent='analyzing…';await new Promise(r=>setTimeout(r,30));
@@ -264,21 +289,24 @@ app.onclick=async e=>{const b=e.target.closest('button');if(!b)return;const D=b.
  else if(D.rm){if(confirm('Delete this song?')){await db('delete',D.rm);await ld();library()}}
  else if(i=='exa')exportSongs(lib,'karaoke-kracker-songs-'+new Date().toISOString().slice(0,10)+'.json');else if(D.ex){const s=lib.find(s=>s.id==D.ex);if(s)exportSongs([s],(s.name.replace(/[^\w\- ]+/g,'').trim()||'song')+'.json')}else if(i=='imb')$('#im').click();
  else if(i=='dm')demo();else if(i=='sv'){await db('put',cur);await ld();$('#ms').textContent='saved ✔'}else if(i=='bk2'){stopPlay();await ld();library()}else if(i=='pb'){play();b.blur()}else if(i=='pn'){play(false,true);b.blur()}else if(i=='rb'){play(true);b.blur()}else if(D.ts){const tr=cur.tr[ct],mn=Math.min(...tr.n.map(n=>n.s),...tr.l.map(l=>l.t)),d=Math.max(+D.ts,-mn);tr.n.forEach(n=>n.s=+(n.s+d).toFixed(2));tr.l.forEach(l=>l.t=+(l.t+d).toFixed(2));eDraw()}else if(i=='z0'){pt=0;movePh();$('#sc').scrollLeft=0}
+ else if(i=='cp'){copySel();b.blur()}else if(i=='cx'){copySel(true);b.blur()}else if(i=='pa'){pasteSel(false);b.blur()}else if(i=='pi'){pasteSel(true);b.blur()}
  else if(D.ct!=null)setCt(+D.ct)
  else if(D.tr){cur.tr[ct].n.forEach(n=>n.m=Math.max(LO,Math.min(HI,n.m+ +D.tr)));eDraw()}
  else if(i=='st')begin();else if(i=='go2')join();else if(i=='rm')startMic().then(ok=>{$('#me').textContent=ok?'Mic on ✔':'Mic failed: '+micErr});
  else if(D.sl!=null){slot=+D.sl;app.querySelectorAll('[data-sl]').forEach(x=>x.classList.toggle('on',+x.dataset.sl==slot))}
  else if(D.a!=null)mc&&mc.publish(tp()+'/up',JSON.stringify({t:'act',i:slot,k:+D.a}))};
 app.onchange=e=>{const t=e.target,f=t.files&&t.files[0];
- if(t.dataset.sel)sel[t.dataset.sel]=t.value;else if(t.id=='sx')strict=t.checked;else if(t.id=='lp'){if(t.value.trim()){cur.tr[ct].l=lrcP(t.value);nd(cur.tr[ct]);t.value='';eDraw()}}
+ if(t.dataset.sel)sel[t.dataset.sel]=t.value;else if(t.id=='sx')strict=t.checked;else if(t.id=='lp'){if(t.value.trim()){lsel.clear();cur.tr[ct].l=lrcP(t.value);nd(cur.tr[ct]);t.value='';eDraw()}}
  else if(t.id=='ao')cur.ao=+t.value||0;else if(f&&t.id=='au')cur.audio=f;else if(f&&t.id=='iv')an(f);else if(f&&t.id=='im'){importSongs(f);t.value=''}};
 app.oninput=e=>{const t=e.target;if(t.id=='tl'){tol=+t.value;$('#tv').textContent=tol}else if(t.id=='gr'){grace=+t.value;$('#gv').textContent=grace}else if(t.id=='nm')cur.name=t.value;else if(t.dataset.oc){const[w,k]=t.dataset.oc.split(',');oc[w][+k]=+t.value;t.parentElement.querySelector('b').textContent=fo(+t.value)}};
 onkeydown=e=>{const a=document.activeElement.tagName;if(a=='INPUT'||a=='TEXTAREA'||a=='SELECT')return;
- if($('#tc')&&cur&&en.size&&['Delete','Backspace','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const tr=cur.tr[ct],k=e.key,sh=e.shiftKey;
-  if(k=='Delete'||k=='Backspace'){tr.n=tr.n.filter(n=>!en.has(n));en.clear()}
-  else if(k[5]=='U'||k[5]=='D'){const d=(k[5]=='U'?1:-1)*(sh?12:1),a=[...en].map(n=>n.m+d);if(Math.min(...a)>=LO&&Math.max(...a)<=HI)en.forEach(n=>n.m+=d)}
-  else{const m=Math.min(...[...en].map(n=>n.s)),d=Math.max((k[5]=='R'?1:-1)*(sh?.5:.05),-m);en.forEach(n=>n.s=+(n.s+d).toFixed(2))}eDraw()}
- else if((e.ctrlKey||e.metaKey)&&e.key=='a'&&$('#tc')){e.preventDefault();cur.tr[ct].n.forEach(n=>en.add(n));eDraw()}
+ if($('#tc')&&cur&&(en.size||lsel.size)&&['Delete','Backspace','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const tr=cur.tr[ct],k=e.key,sh=e.shiftKey;
+  if(k=='Delete'||k=='Backspace'){tr.n=tr.n.filter(n=>!en.has(n));tr.l=tr.l.filter(l=>!lsel.has(l));en.clear();lsel.clear()}
+  else if(k[5]=='U'||k[5]=='D'){if(en.size){const d=(k[5]=='U'?1:-1)*(sh?12:1),a=[...en].map(n=>n.m+d);if(Math.min(...a)>=LO&&Math.max(...a)<=HI)en.forEach(n=>n.m+=d)}}
+  else{const m=Math.min(...[...en].map(n=>n.s),...[...lsel].map(l=>l.t)),d=Math.max((k[5]=='R'?1:-1)*(sh?.5:.05),-m);en.forEach(n=>n.s=+(n.s+d).toFixed(2));lsel.forEach(l=>l.t=+(l.t+d).toFixed(2))}eDraw()}
+ else if((e.ctrlKey||e.metaKey)&&e.key=='a'&&$('#tc')){e.preventDefault();cur.tr[ct].n.forEach(n=>en.add(n));cur.tr[ct].l.forEach(l=>lsel.add(l));eDraw()}
+ else if((e.ctrlKey||e.metaKey)&&e.key.length==1&&'cxv'.includes(e.key.toLowerCase())&&$('#tc')){e.preventDefault();const k=e.key.toLowerCase();if(k=='v')pasteSel(e.shiftKey);else copySel(k=='x')}
+ else if(e.key=='Enter'&&$('#tc')&&lsel.size==1&&!en.size){e.preventDefault();editLyric(cur.tr[ct],[...lsel][0])}
  else if(e.key==' '&&$('#pb')){e.preventDefault();document.activeElement.blur();play()}
  else if((e.key==' '||e.key=='Enter')&&$('#ov').style.display=='flex'){e.preventDefault();$('#ovb').click()}
  else if('123'.includes(e.key)&&$('#ab0'))$('#ab'+(e.key-1)).click();
